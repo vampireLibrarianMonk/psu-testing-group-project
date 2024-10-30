@@ -1,33 +1,67 @@
 import unittest
-from unittest.mock import MagicMock
+import subprocess
+from unittest.mock import patch
 
-class TestPluginSystem(unittest.TestCase):
+
+class TestAuthPluginCLI(unittest.TestCase):
     """
-    This test suite validates the plugin system, ensuring that plugins can be loaded and executed as expected.
+    This test suite validates the integration of HTTPie’s CLI with simulated authentication functionality.
+    It captures output generated from a subprocess call to HTTPie, testing if custom Authorization headers
+    are added correctly and included in live HTTP requests.
     """
 
-    def test_plugin_load(self):
+    @patch('httpie.plugins.AuthPlugin')
+    def test_httpie_bearer_token_auth(self, MockAuthPlugin):
         """
-        Test loading of plugins:
-        - Calls `load_all_plugins` to retrieve a list of available plugins.
-        - Verifies that at least one plugin is loaded, indicating the system is populating plugins correctly.
+        Test HTTPie CLI with a custom Bearer Token Authorization header:
+        - Mocks an `AuthPlugin` to add a Bearer token in the Authorization header.
+        - Makes a live request to `httpbin.org/get` to inspect the Authorization header in the response.
         """
-        # loaded_plugins = load_all_plugins()
-        # self.assertGreater(len(loaded_plugins), 0)
+        # Mock an instance of AuthPlugin to simulate an authentication plugin
+        mock_plugin_instance = MockAuthPlugin.return_value
+        mock_plugin_instance.get_auth.return_value = ("Authorization", "Bearer test_token")
 
-    def test_custom_plugin_execution(self):
-        """
-        Test execution of a custom plugin:
-        - Mocks a plugin with an 'execute' method that returns 'Executed'.
-        - Registers the mock plugin, then calls its `execute` method.
-        - Asserts that the method returns 'Executed', confirming that plugin registration and execution work as intended.
-        """
-        # mock_plugin = MagicMock()
-        # mock_plugin.execute.return_value = 'Executed'
-        # register_plugin(mock_plugin)
+        # Target URL for testing (httpbin.org/get will echo back the headers it receives)
+        url = 'https://httpbin.org/get'
 
-        # result = mock_plugin.execute()
-        # self.assertEqual(result, 'Executed')
+        # Run HTTPie with a real GET request, including the mocked Authorization header
+        result = subprocess.run([
+            'http', 'GET', url, 'Authorization: Bearer test_token'
+        ], capture_output=True, text=True)
+
+        # Check if HTTPie CLI ran without errors
+        self.assertEqual(result.returncode, 0, f"HTTPie CLI failed: {result.stderr}")
+
+        # Confirm that the Authorization header was sent by inspecting httpbin's echoed headers
+        self.assertIn('"Authorization": "Bearer test_token"', result.stdout)
+
+    @patch('httpie.plugins.AuthPlugin')
+    def test_httpie_basic_auth(self, MockAuthPlugin):
+        """
+        Test HTTPie CLI with Basic Authentication:
+        - Mocks an `AuthPlugin` to add a Basic Authorization header with a username and password.
+        - Sends a live GET request to `httpbin.org/basic-auth/user/passwd` to verify correct credentials.
+        """
+        # Mock an AuthPlugin to return a Basic Authorization header with credentials
+        mock_plugin_instance = MockAuthPlugin.return_value
+        username = "user"
+        password = "passwd"
+        mock_plugin_instance.get_auth.return_value = ("Authorization", f"Basic {username}:{password}")
+
+        # Use a URL that requires Basic Authentication (httpbin.org/basic-auth/user/passwd)
+        url = f'https://httpbin.org/basic-auth/{username}/{password}'
+
+        # Execute HTTPie with the explicit GET method, URL, and Basic Auth flag in the correct order
+        result = subprocess.run([
+            'http', 'GET', url, '-a', f"{username}:{password}"
+        ], capture_output=True, text=True)
+
+        # Check if HTTPie ran successfully
+        self.assertEqual(result.returncode, 0, f"HTTPie CLI failed: {result.stderr}")
+
+        # Validate that the response indicates successful authentication
+        self.assertIn('"authenticated": true', result.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()
