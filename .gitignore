@@ -16,9 +16,6 @@ env.bak/
 venv.bak/
 *.env
 
-# Conda environment files
-environment.yml
-
 # pipenv and poetry
 Pipfile
 Pipfile.lock
