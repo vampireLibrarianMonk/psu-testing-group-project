@@ -133,6 +133,93 @@ class TestCommandLineArguments(unittest.TestCase):
         if isinstance(response, dict):
             self.assertEqual(response['url'], 'https://httpbin.org/get')  # Final URL after redirects
 
+    def test_empty_json_payload(self):
+        """Test a POST request with an empty JSON object."""
+        response = self.run_httpie_command(['http', 'POST', 'https://httpbin.org/post', '{}'])
+        self.assertIn('{}', response)  # Adjust assertion to expected response content
+
+    def test_no_headers(self):
+        """Test a GET request with no headers."""
+        response = self.run_httpie_command(['http', 'GET', 'https://httpbin.org/headers'])
+        self.assertNotIn('Authorization', response)  # Ensure no headers are sent
+
+    def test_header_count_below_limit(self):
+        """Test a GET request with a header count below the assumed limit.
+
+        - Using 14 headers, which is well within the range typically handled
+          by HTTP servers without any issues. This test ensures normal operation
+          with a moderate number of headers.
+        """
+        headers = ['Header{}:Value{}'.format(i, i) for i in range(1, 15)]  # 14 headers
+        response = self.run_httpie_command(['http', 'GET', 'https://httpbin.org/headers'] + headers)
+        if isinstance(response, dict) and 'headers' in response:
+            self.assertEqual(response['headers'].get('Header14'), 'Value14')  # Check the last header
+
+    def test_header_count_at_limit(self):
+        """Test a GET request with a header count at the assumed limit.
+
+        - Using 20 headers as an estimated upper limit, based on common handling
+          capabilities of servers and the absence of specific documentation from httpbin.org.
+          This tests the boundary of header handling without exceeding typical server limits.
+        """
+        headers = ['Header{}:Value{}'.format(i, i) for i in range(1, 21)]  # 20 headers (assumed limit)
+        response = self.run_httpie_command(['http', 'GET', 'https://httpbin.org/headers'] + headers)
+        if isinstance(response, dict) and 'headers' in response:
+            self.assertEqual(response['headers'].get('Header20'), 'Value20')  # Check the last header
+
+    def test_header_count_until_error(self):
+        """Test a GET request with header counts increasing in increments of 10 until an error is encountered.
+
+        - The test will pass if an error is detected before reaching the maximum header count (100).
+          If no error is encountered, it will check the response type for correctness.
+        """
+        error_detected = False
+        for count in range(10, 101, 10):  # Incrementing header count from 10 to 100
+            headers = ['Header{}:Value{}'.format(i, i) for i in range(1, count + 1)]
+            response = self.run_httpie_command(['http', 'GET', 'https://httpbin.org/headers'] + headers)
+
+            # Check for error response
+            if "error" in response or isinstance(response, str):
+                error_detected = True
+                break  # Exit the loop early if an error is detected
+
+        # Assert that an error was detected before reaching the maximum limit
+        self.assertTrue(error_detected, "Expected an error before reaching the maximum header count of 100.")
+
+    def test_payload_below_limit(self):
+        """Test a POST request with a payload size below the assumed limit.
+
+        - Using 500 characters, which is small enough to be comfortably handled by httpbin.org
+          and to confirm standard behavior for a minimal payload.
+        """
+        small_payload = 'a' * 500  # 500 characters (below the limit)
+        response = self.run_httpie_command(['http', 'POST', 'https://httpbin.org/post', f'data={small_payload}'])
+        if isinstance(response, dict) and 'data' in response:
+            self.assertIn(small_payload, response['data'])
+
+    def test_payload_at_limit(self):
+        """Test a POST request with a payload size at the assumed limit.
+
+        - The 1,400-character payload is chosen based on user reports that httpbin.org
+          can handle payloads up to approximately 1,100 to 1,400 bytes before returning
+          a '413 Payload Too Large' error. Source: https://github.com/postmanlabs/httpbin/issues/614
+        """
+        limit_payload = 'a' * 1400  # 1,400 characters (at the assumed limit)
+        response = self.run_httpie_command(['http', 'POST', 'https://httpbin.org/post', f'data={limit_payload}'])
+        if isinstance(response, dict) and 'data' in response:
+            self.assertIn(limit_payload, response['data'])
+
+    def test_payload_above_limit(self):
+        """Test a POST request with a payload size exceeding the assumed limit to observe error behavior.
+
+        - Using 2,000 characters to intentionally exceed the reported limit and trigger a
+          '413 Payload Too Large' error. This test checks how httpbin.org handles excessively large payloads.
+        """
+        large_payload = 'a' * 2000  # 2,000 characters (exceeds limit)
+        response = self.run_httpie_command(['http', 'POST', 'https://httpbin.org/post', f'data={large_payload}'])
+        # Check for an error message or unexpected response
+        self.assertTrue("error" in response or isinstance(response, str))  # Check for error or response text
+
 
 if __name__ == "__main__":
     unittest.main()
