@@ -1,3 +1,4 @@
+import tempfile
 import unittest
 import subprocess
 import json
@@ -22,7 +23,7 @@ class TestCommandLineArguments(unittest.TestCase):
         except json.JSONDecodeError:
             return result.stdout  # Return raw text for non-JSON responses
 
-    def test_get_request(self):
+    def test_01_get_request(self):
         """Test a basic GET request to verify response structure.
 
         - Uses HTTPie to perform a GET request to a test URL.
@@ -32,7 +33,7 @@ class TestCommandLineArguments(unittest.TestCase):
         if isinstance(response, dict):
             self.assertEqual(response['url'], 'https://httpbin.org/get')
 
-    def test_post_request_with_json(self):
+    def test_02_post_request_with_json(self):
         """Test a POST request with JSON payload.
 
         - Uses HTTPie's JSON parsing (`key:=value` format) to send a JSON object in the POST body.
@@ -45,7 +46,7 @@ class TestCommandLineArguments(unittest.TestCase):
         if isinstance(response, dict) and 'json' in response:
             self.assertEqual(response['json'], {'name': 'John', 'age': 30, 'married': True})
 
-    def test_custom_headers(self):
+    def test_03_custom_headers(self):
         """Test a GET request with custom headers.
 
         - Sends custom headers using HTTPie CLI.
@@ -59,7 +60,7 @@ class TestCommandLineArguments(unittest.TestCase):
             self.assertEqual(response['headers']['Authorization'], 'Bearer token123')
             self.assertEqual(response['headers']['X-Api-Token'], '123')
 
-    def test_basic_authentication(self):
+    def test_04_basic_authentication(self):
         """Test basic authentication.
 
         - Uses HTTPie's `-a` option for basic authentication (username:password).
@@ -71,7 +72,7 @@ class TestCommandLineArguments(unittest.TestCase):
         if isinstance(response, dict):
             self.assertTrue(response.get('authenticated', False))
 
-    def test_verbose_mode(self):
+    def test_05_verbose_mode(self):
         """Test verbose mode to capture all details of the request.
 
         - Uses HTTPie's `--verbose` option to capture detailed request-response info.
@@ -83,7 +84,7 @@ class TestCommandLineArguments(unittest.TestCase):
         self.assertIn('GET /get HTTP/1.1', result.stdout)
         self.assertIn('Host: httpbin.org', result.stdout)
 
-    def test_session_handling(self):
+    def test_06_session_handling(self):
         """Test session handling with a POST request in session mode.
 
         - Uses HTTPie's `--session` option to save session data.
@@ -96,7 +97,7 @@ class TestCommandLineArguments(unittest.TestCase):
         if isinstance(response, dict) and 'json' in response:
             self.assertEqual(response['json'], {'key': 'value'})
 
-    def test_offline_mode(self):
+    def test_07_offline_mode(self):
         """Test offline mode for command parsing without sending requests.
 
         - Uses HTTPie's `--offline` and `--ignore-stdin` options to simulate request generation.
@@ -110,7 +111,7 @@ class TestCommandLineArguments(unittest.TestCase):
         self.assertIn('POST /post HTTP/1.1', result.stdout)
         self.assertIn('"name": "OfflineUser"', result.stdout)
 
-    def test_streaming(self):
+    def test_08_streaming(self):
         """Test streaming mode to handle live responses.
 
         - Uses HTTPie's `--stream` option to receive a continuous data stream.
@@ -121,7 +122,7 @@ class TestCommandLineArguments(unittest.TestCase):
         ], capture_output=True, text=True)
         self.assertEqual(result.returncode, 0)  # Stream should complete successfully
 
-    def test_redirect_following(self):
+    def test_09_redirect_following(self):
         """Test handling of multiple redirects with the --follow option.
 
         - Uses HTTPie's `--follow` option to handle redirects automatically.
@@ -133,17 +134,17 @@ class TestCommandLineArguments(unittest.TestCase):
         if isinstance(response, dict):
             self.assertEqual(response['url'], 'https://httpbin.org/get')  # Final URL after redirects
 
-    def test_empty_json_payload(self):
+    def test_10_empty_json_payload(self):
         """Test a POST request with an empty JSON object."""
         response = self.run_httpie_command(['http', 'POST', 'https://httpbin.org/post', '{}'])
         self.assertIn('{}', response)  # Adjust assertion to expected response content
 
-    def test_no_headers(self):
+    def test_11_no_headers(self):
         """Test a GET request with no headers."""
         response = self.run_httpie_command(['http', 'GET', 'https://httpbin.org/headers'])
         self.assertNotIn('Authorization', response)  # Ensure no headers are sent
 
-    def test_header_count_below_limit(self):
+    def test_12_header_count_below_limit(self):
         """Test a GET request with a header count below the assumed limit.
 
         - Using 14 headers, which is well within the range typically handled
@@ -155,7 +156,7 @@ class TestCommandLineArguments(unittest.TestCase):
         if isinstance(response, dict) and 'headers' in response:
             self.assertEqual(response['headers'].get('Header14'), 'Value14')  # Check the last header
 
-    def test_header_count_at_limit(self):
+    def test_13_header_count_at_limit(self):
         """Test a GET request with a header count at the assumed limit.
 
         - Using 20 headers as an estimated upper limit, based on common handling
@@ -167,7 +168,7 @@ class TestCommandLineArguments(unittest.TestCase):
         if isinstance(response, dict) and 'headers' in response:
             self.assertEqual(response['headers'].get('Header20'), 'Value20')  # Check the last header
 
-    def test_header_count_until_error(self):
+    def test_14_header_count_until_error(self):
         """Test a GET request with header counts increasing in increments of 10 until an error is encountered.
 
         - The test will pass if an error is detected before reaching the maximum header count (100).
@@ -186,39 +187,53 @@ class TestCommandLineArguments(unittest.TestCase):
         # Assert that an error was detected before reaching the maximum limit
         self.assertTrue(error_detected, "Expected an error before reaching the maximum header count of 100.")
 
-    def test_payload_below_limit(self):
-        """Test a POST request with a payload size below the assumed limit.
+    def test_15_payload_size_limit(self):
+        """Test a POST request with payload sizes increasing in increments of 5 MB, up to 20there  MB.
 
-        - Using 500 characters, which is small enough to be comfortably handled by httpbin.org
-          and to confirm standard behavior for a minimal payload.
+        - This test writes the payload to a temporary file in chunks and uses HTTPie's @ notation
+          to avoid exceeding the argument list length limit imposed by the operating system.
         """
-        small_payload = 'a' * 500  # 500 characters (below the limit)
-        response = self.run_httpie_command(['http', 'POST', 'https://httpbin.org/post', f'data={small_payload}'])
-        if isinstance(response, dict) and 'data' in response:
-            self.assertIn(small_payload, response['data'])
+        error_detected = False
+        max_size_mb = 20  # Maximum payload size in MB
+        step_size_mb = 5  # Step size in MB
+        chunk_size_mb = 1  # Chunk size in MB
 
-    def test_payload_at_limit(self):
-        """Test a POST request with a payload size at the assumed limit.
+        # Convert MB to characters (1 MB = 1,000,000 characters)
+        max_size = max_size_mb * 1000000
+        step_size = step_size_mb * 1000000
+        chunk_size = chunk_size_mb * 1000000
 
-        - The 1,400-character payload is chosen based on user reports that httpbin.org
-          can handle payloads up to approximately 1,100 to 1,400 bytes before returning
-          a '413 Payload Too Large' error. Source: https://github.com/postmanlabs/httpbin/issues/614
-        """
-        limit_payload = 'a' * 1400  # 1,400 characters (at the assumed limit)
-        response = self.run_httpie_command(['http', 'POST', 'https://httpbin.org/post', f'data={limit_payload}'])
-        if isinstance(response, dict) and 'data' in response:
-            self.assertIn(limit_payload, response['data'])
+        for size in range(step_size, max_size + 1, step_size):
+            with self.subTest(payload_size=f"{size // 1000000} MB"):
+                # Create a temporary file and write the payload in chunks
+                with tempfile.NamedTemporaryFile(mode='w+', delete=False) as temp_file:
+                    chunks = size // chunk_size
+                    remainder = size % chunk_size
 
-    def test_payload_above_limit(self):
-        """Test a POST request with a payload size exceeding the assumed limit to observe error behavior.
+                    # Write full chunks of 1 MB each
+                    for _ in range(chunks):
+                        temp_file.write('a' * chunk_size)
 
-        - Using 2,000 characters to intentionally exceed the reported limit and trigger a
-          '413 Payload Too Large' error. This test checks how httpbin.org handles excessively large payloads.
-        """
-        large_payload = 'a' * 2000  # 2,000 characters (exceeds limit)
-        response = self.run_httpie_command(['http', 'POST', 'https://httpbin.org/post', f'data={large_payload}'])
-        # Check for an error message or unexpected response
-        self.assertTrue("error" in response or isinstance(response, str))  # Check for error or response text
+                    # Write any remaining characters
+                    if remainder:
+                        temp_file.write('a' * remainder)
+
+                    temp_file_name = temp_file.name
+
+                # Use the @ notation to read the payload from the file
+                response = self.run_httpie_command([
+                    'http', '--ignore-stdin', 'POST', 'https://httpbin.org/post', f'@{temp_file_name}'
+                ])
+
+                # Check if the response contains an error message or an indication of failure
+                if "error" in response or isinstance(response, str):
+                    error_detected = True
+                    print(f"Error detected at payload size: {size // 1000000} MB")
+                    break  # Exit loop when the error threshold is reached
+
+        # Assert that no error was detected and the test was successful
+        self.assertFalse(error_detected,
+                         "No error encountered: HTTPie handled all payload sizes up to 200 MB successfully.")
 
 
 if __name__ == "__main__":
