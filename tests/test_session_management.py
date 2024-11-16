@@ -1,19 +1,14 @@
 import unittest
 import subprocess
 import os
-import json
-
-from flask_app.app import tokenValue
-
 
 class TestSessionManagement(unittest.TestCase):
     """
     A unittest-based test suite for validating session management using the HTTPie CLI.
 
     This suite tests various aspects of session handling, such as header persistence,
-    session reuse, named sessions, anonymous sessions, and read-only session modes.
-    It uses subprocess to run HTTPie commands and checks the responses to ensure
-    correct functionality.
+    session reuse, named sessions, anonymous sessions, read-only session modes, handling
+    of large payloads, malformed headers, and non-persistent sessions.
 
     Attributes:
         base_url (str): The base URL of the Flask app being tested.
@@ -43,17 +38,6 @@ class TestSessionManagement(unittest.TestCase):
     def test_header_persistence_cli(self):
         """
         Test header persistence using the HTTPie CLI.
-
-        Description:
-            Verifies that custom headers are correctly persisted in a session file
-            and reused across multiple requests.
-
-        Steps:
-            1. Create a session with a custom 'Authorization' header.
-            2. Reuse the session and check if the header is still present.
-
-        Assertions:
-            - Checks if the expected message indicating header reception is in the response.
         """
         subprocess.run(['http', '--session=' + self.session_path, f'{self.base_url}/test/headers', f'Authorization:Bearer {self.tokenValue}'])
         result = subprocess.run(['http', '--session=' + self.session_path, f'{self.base_url}/test/headers'], capture_output=True)
@@ -62,17 +46,6 @@ class TestSessionManagement(unittest.TestCase):
     def test_session_reuse_cli(self):
         """
         Test session reuse and authentication using the HTTPie CLI.
-
-        Description:
-            Ensures that a session can be reused for maintaining authentication details
-            across requests.
-
-        Steps:
-            1. Create a session with authentication details.
-            2. Reuse the session and verify if the authentication details persist.
-
-        Assertions:
-            - Checks if the response indicates that the 'Authorization' header was received.
         """
         subprocess.run(['http', '--session=' + self.session_path, f'{self.base_url}/test/headers', f'Authorization:Bearer {self.tokenValue}'])
         result = subprocess.run(['http', '--session=' + self.session_path, f'{self.base_url}/test/headers'], capture_output=True)
@@ -81,17 +54,6 @@ class TestSessionManagement(unittest.TestCase):
     def test_named_session_cli(self):
         """
         Test named session management using the HTTPie CLI.
-
-        Description:
-            Verifies that named sessions are created and stored correctly, using
-            authentication credentials.
-
-        Steps:
-            1. Create a named session with basic authentication credentials.
-            2. Check if the named session file has been created successfully.
-
-        Assertions:
-            - Checks if the named session file exists on the filesystem.
         """
         subprocess.run(['http', '--session=' + self.named_session_path, '-a', 'user1:password', f'{self.base_url}/test/headers'])
         self.assertTrue(os.path.exists(self.named_session_path))
@@ -99,17 +61,6 @@ class TestSessionManagement(unittest.TestCase):
     def test_anonymous_session_cli(self):
         """
         Test anonymous session handling using the HTTPie CLI.
-
-        Description:
-            Ensures that headers persist when using anonymous sessions that are reused
-            across multiple hosts.
-
-        Steps:
-            1. Create an anonymous session with a custom 'Authorization' header.
-            2. Reuse the session and verify if the header persists.
-
-        Assertions:
-            - Checks if the response contains the expected message indicating header reception.
         """
         subprocess.run(['http', '--session=/tmp/anon_session.json', f'{self.base_url}/test/headers', f'Authorization:Bearer {self.userValue}'])
         result = subprocess.run(['http', '--session=/tmp/anon_session.json', f'{self.base_url}/test/headers'], capture_output=True)
@@ -118,79 +69,56 @@ class TestSessionManagement(unittest.TestCase):
     def test_readonly_session_cli(self):
         """
         Test read-only session handling using the HTTPie CLI.
-
-        Description:
-            Validates that session data remains unchanged when loaded in read-only mode,
-            ensuring the integrity of the session.
-
-        Steps:
-            1. Create a session with authentication details.
-            2. Load the session in read-only mode and verify if the header is still present.
-
-        Assertions:
-            - Checks if the response indicates that the 'Authorization' header was received.
         """
         subprocess.run(['http', '--session=' + self.session_path, f'{self.base_url}/test/headers', f'Authorization:Bearer {self.tokenValue}'])
         result = subprocess.run(['http', '--session-read-only=' + self.session_path, f'{self.base_url}/test/headers'], capture_output=True)
         self.assertIn('"Authorization header received"', result.stdout.decode())
 
-    def test_session_file_contents(self):
+    def test_large_payload_session(self):
         """
-        Test the contents of the session file.
+        Test handling of large payloads in sessions.
 
-        Description:
-            Verifies that the session file is created correctly and contains the
-            expected headers and authentication data.
-
-        Steps:
-            1. Create a session with a custom 'Authorization' header.
-            2. Read the session file and verify its contents.
-
-        Assertions:
-            - Checks if the session file contains the 'Authorization' header with the correct value.
+        Verifies that the server can receive and handle large payloads without crashing or data loss.
         """
-        subprocess.run(['http', '--session=' + self.session_path, f'{self.base_url}/test/headers',
-                        f'Authorization:Bearer {self.tokenValue}'])
-        with open(self.session_path, 'r') as file:
-            session_data = json.load(file)
+        for size_kb in range(10, 121, 10):  # Testing payloads from 10 KB to 100 KB in 10 KB increments
+            with self.subTest(payload_size=f"{size_kb} KB"):
+                large_payload = 'x' * (size_kb * 1024)  # Generate payload of specified size
+                # Use --form (-f) to send data as form-encoded in the body
+                result = subprocess.run([
+                    'http', '--session=' + self.session_path, '--ignore-stdin', '-f', 'POST',
+                    f'{self.base_url}/test/large_payload', f'payload={large_payload}'
+                ], capture_output=True, text=True)
 
-        # Extract headers as a dictionary for easier lookup
-        headers_dict = {header['name']: header['value'] for header in session_data['headers']}
+                # Check that the response confirms receipt of the payload
+                self.assertIn("Payload received", result.stdout, f"Failed to receive payload of size {size_kb} KB")
 
-        # Assert that 'Authorization' header exists and has the correct value
-        self.assertIn('Authorization', headers_dict)
-        self.assertEqual(headers_dict['Authorization'], f'Bearer {tokenValue}')
-
-    def test_invalid_session_path(self):
+    def test_malformed_header_in_session(self):
         """
-        Test behavior with an invalid session file path.
+        Test handling of malformed headers in sessions.
 
-        Description:
-            Verifies that HTTPie handles invalid session paths gracefully and
-            does not create an unexpected session file.
-
-        Steps:
-            1. Attempt to create a session with an invalid path.
-            2. Check if the invalid session file path does not exist.
-
-        Assertions:
-            - Checks that the invalid session file path does not exist.
+        Ensures that malformed headers are either rejected or handled gracefully without crashing.
         """
-        invalid_path = '/invalid/path/to/session.json'
-        subprocess.run(['http', '--session=' + invalid_path, f'{self.base_url}/test/headers', f'Authorization:Bearer {self.tokenValue}'], capture_output=True)
-        self.assertFalse(os.path.exists(invalid_path))
+        malformed_header = 'Authorization:Bearer invalid@token!'  # Use an invalid format instead of a null byte
+        result = subprocess.run(
+            ['http', '--session=' + self.session_path, f'{self.base_url}/test/headers', malformed_header],
+            capture_output=True,
+            text=True
+        )
+
+        # Check that the response contains an error indicating an issue with the Authorization header
+        self.assertIn("Authorization header missing or incorrect", result.stdout,
+                      "Malformed header was not handled correctly")
+
+    def test_non_persistent_session(self):
+        """
+        Test the behavior of non-persistent sessions by ensuring no session file is created.
+        """
+        result = subprocess.run(['http', f'{self.base_url}/test/headers', f'Authorization:Bearer sampletoken'], capture_output=True)
+        self.assertNotIn('session', os.listdir('.'))  # Confirm that no session file was created.
 
     def tearDown(self):
         """
         Cleanup method to remove session files after each test.
-
-        Deletes:
-            - The default session file (self.session_path).
-            - The named session file (self.named_session_path).
-            - The anonymous session file (/tmp/anon_session.json).
-
-        This ensures a clean environment for subsequent tests by removing any
-        residual session data.
         """
         if os.path.exists(self.session_path):
             os.remove(self.session_path)

@@ -140,6 +140,23 @@ def basic_auth():
         return jsonify({"message": "Basic Auth successful"}), 200
     return jsonify({"error": "Unauthorized"}), 401
 
+@app.route('/test/large_payload', methods=['POST'])
+def large_payload():
+    """
+    Handle the route for testing large payloads in session.
+
+    Accepts a large payload in the request and verifies if it can be processed
+    and stored correctly.
+
+    Returns:
+        Response: A JSON object confirming receipt of the payload.
+        int: HTTP status code 200 if the payload is successfully received.
+    """
+    payload = request.form.get('payload')
+    if payload:
+        return jsonify({"status": "Payload received", "payload_size": len(payload)}), 200
+    return jsonify({"error": "Payload not provided"}), 400
+
 #-------------------------------------------------------------------------------
 # Main Entry Point
 #-------------------------------------------------------------------------------
