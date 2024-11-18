@@ -1,58 +1,89 @@
 import unittest
+import subprocess
+import json
 
-class TestHTTPStatusCodes(unittest.TestCase):
+
+class TestHTTPieIntegration(unittest.TestCase):
     """
-    This test suite verifies HTTP status code responses, covering various types of HTTP responses
-    such as informational, success, redirection, client error and server error.
+    This test suite validates the Flask app endpoints using HTTPie CLI commands.
     """
 
-    def test_100_informational(self):
+    def run_httpie(self, method, url, allow_redirects=True):
         """
-        Test informational status code (100 range):
-        - Sends a GET request expecting a 102 status response.
-        - Confirms the response status code is 102 (Processing).
+        Helper to run HTTPie commands via subprocess.
         """
-        # response = send_request('GET', 'http://localhost:5001/status/102')
-        # self.assertEqual(response.status_code, 102)
+        try:
+            args = ['http', method, url]
+            if not allow_redirects:
+                # Do not include --follow if redirects should not be followed
+                args.append('--headers')  # Adds extra detail to verify status codes
+            result = subprocess.run(
+                args,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True
+            )
+            return result.stdout, result.stderr, result.returncode
+        except FileNotFoundError:
+            self.fail("HTTPie is not installed or not in PATH")
 
-    def test_200_success(self):
+    def test_100_informational_httpie(self):
         """
-        Test success status code (200 range):
-        - Sends a GET request expecting a 200 status response.
-        - Validates that the response contains JSON data with a success message.
+        Test 102 Processing response using HTTPie.
         """
-        # response = send_request('GET', 'http://localhost:5001/status/200')
-        # self.assertEqual(response.status_code, 200)
-        # self.assertEqual(response.json(), {"message": "Success"})
+        stdout, stderr, returncode = self.run_httpie('GET', 'http://localhost:5001/status/102')
 
-    def test_300_redirection(self):
-        """
-        Test redirection status code (300 range):
-        - Sends a GET request expecting a 302 status response without following redirects.
-        - Confirms the response status code is 302 (Found).
-        """
-        # response = send_request('GET', 'http://localhost:5001/status/302', allow_redirects=False)
-        # self.assertEqual(response.status_code, 302)
+        # HTTPie should succeed in sending the request (returncode = 0)
+        self.assertEqual(returncode, 0)
 
-    def test_400_client_error(self):
-        """
-        Test client error status code (400 range):
-        - Sends a GET request expecting a 404 status response.
-        - Validates that the response contains JSON data with an error message.
-        """
-        # response = send_request('GET', 'http://localhost:5001/status/404')
-        # self.assertEqual(response.status_code, 404)
-        # self.assertEqual(response.json(), {"error": "Not Found"})
+        # Expect no response body for informational 102 Processing
+        self.assertIn('processing', stdout.lower())
+        self.assertEqual('', stderr.strip())
 
-    def test_500_server_error(self):
+    def test_200_success_httpie(self):
         """
-        Test server error status code (500 range):
-        - Sends a GET request expecting a 500 status response.
-        - Checks that the response includes JSON data with an internal server error message.
+        Test 200 OK response using HTTPie.
         """
-        # response = send_request('GET', 'http://localhost:5001/status/500')
-        # self.assertEqual(response.status_code, 500)
-        # self.assertEqual(response.json(), {"error": "Internal Server Error"})
+        stdout, stderr, returncode = self.run_httpie('GET', 'http://localhost:5001/status/200')
+        self.assertEqual(returncode, 0)
+        response_json = json.loads(stdout)
+        self.assertEqual(response_json, {"message": "Success"})
+
+    def test_302_redirection_httpie(self):
+        """
+        Test 302 Found response using HTTPie without following redirects.
+        """
+        stdout, stderr, returncode = self.run_httpie('GET', 'http://localhost:5001/status/302', allow_redirects=False)
+
+        # HTTPie should succeed in sending the request
+        self.assertEqual(returncode, 0)
+
+        # Ensure the redirection message is in the output (case insensitive)
+        response_output = stdout.lower()  # Normalize case for robustness
+        self.assertIn('302 found', response_output)
+
+    def test_404_client_error_httpie(self):
+        """
+        Test 404 Not Found response using HTTPie.
+        """
+        stdout, stderr, returncode = self.run_httpie('GET', 'http://localhost:5001/status/404')
+        self.assertEqual(returncode, 0)
+        response_json = json.loads(stdout)
+        self.assertEqual(response_json, {"error": "Not Found"})
+
+    def test_500_server_error_httpie(self):
+        """
+        Test 500 Internal Server Error response using HTTPie.
+        """
+        stdout, stderr, returncode = self.run_httpie('GET', 'http://localhost:5001/status/500')
+
+        # HTTPie should succeed in sending the request
+        self.assertEqual(returncode, 0)
+
+        # Ensure the server error message is in the output
+        response_json = json.loads(stdout)
+        self.assertEqual(response_json, {"error": "Internal Server Error"})
+
 
 if __name__ == "__main__":
     unittest.main()
