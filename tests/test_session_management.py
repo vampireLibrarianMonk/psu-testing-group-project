@@ -116,6 +116,85 @@ class TestSessionManagement(unittest.TestCase):
         result = subprocess.run(['http', f'{self.base_url}/test/headers', f'Authorization:Bearer sampletoken'], capture_output=True)
         self.assertNotIn('session', os.listdir('.'))  # Confirm that no session file was created.
 
+    def test_cookie_persistence(self):
+        """
+        Test cookie persistence in sessions.
+
+        Verifies that cookies set in one request are sent in subsequent requests
+        when using a session.
+        """
+        # First request to set a cookie
+        set_cookie_result = subprocess.run([
+            'http', '--session=' + self.session_path, f'{self.base_url}/set-cookie'
+        ], capture_output=True, text=True)
+        self.assertIn("Cookie set successfully", set_cookie_result.stdout)
+
+        # Second request to verify the cookie is sent
+        verify_cookie_result = subprocess.run([
+            'http', '--session=' + self.session_path, f'{self.base_url}/check-cookie'
+        ], capture_output=True, text=True)
+        self.assertIn("Cookie received", verify_cookie_result.stdout)
+
+    def test_expired_cookie_handling(self):
+        """
+        Test handling of expired cookies in sessions.
+
+        Verifies that expired cookies are not sent in subsequent requests.
+        """
+        # Set a cookie with a short expiration time
+        subprocess.run([
+            'http', '--session=' + self.session_path, f'{self.base_url}/set-expired-cookie'
+        ], capture_output=True, text=True)
+
+        # Wait for the cookie to expire (if expiration is time-based)
+        import time
+        time.sleep(2)  # Simulate waiting for expiration
+
+        # Verify the expired cookie is not sent
+        verify_expired_result = subprocess.run([
+            'http', '--session=' + self.session_path, f'{self.base_url}/check-cookie'
+        ], capture_output=True, text=True)
+        self.assertIn("No valid cookies", verify_expired_result.stdout)
+
+    def test_multiple_cookies(self):
+        """
+        Test handling of multiple cookies in sessions.
+
+        Ensures that all cookies set by the server are sent in subsequent requests.
+        """
+        # First request to set multiple cookies
+        subprocess.run([
+            'http', '--session=' + self.session_path, f'{self.base_url}/set-multiple-cookies'
+        ], capture_output=True, text=True)
+
+        # Second request to verify all cookies are sent
+        verify_multiple_cookies_result = subprocess.run([
+            'http', '--session=' + self.session_path, f'{self.base_url}/check-multiple-cookies'
+        ], capture_output=True, text=True)
+        self.assertIn("All cookies received", verify_multiple_cookies_result.stdout)
+
+    def test_cookie_deletion(self):
+        """
+        Test handling of cookie deletion in sessions.
+
+        Verifies that cookies deleted by the server are no longer sent in future requests.
+        """
+        # First request to set a cookie
+        subprocess.run([
+            'http', '--session=' + self.session_path, f'{self.base_url}/set-cookie'
+        ], capture_output=True, text=True)
+
+        # Request to delete the cookie
+        subprocess.run([
+            'http', '--session=' + self.session_path, f'{self.base_url}/delete-cookie'
+        ], capture_output=True, text=True)
+
+        # Verify the cookie is not sent
+        verify_deleted_cookie_result = subprocess.run([
+            'http', '--session=' + self.session_path, f'{self.base_url}/check-cookie'
+        ], capture_output=True, text=True)
+        self.assertIn("No valid cookies", verify_deleted_cookie_result.stdout)
+
     def tearDown(self):
         """
         Cleanup method to remove session files after each test.

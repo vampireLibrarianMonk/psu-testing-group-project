@@ -1,4 +1,7 @@
 import unittest
+import subprocess
+
+BASE_URL = "http://127.0.0.1:5001"  # URL of the running Flask app
 
 class TestRequestParsing(unittest.TestCase):
     """
@@ -29,14 +32,17 @@ class TestRequestParsing(unittest.TestCase):
 
     def test_custom_headers(self):
         """
-        Test request with custom headers:
-        - Creates a GET request with a custom 'Authorization' header.
-        - Ensures that the header is included in the request and that its value is set to the provided token.
+        Tests HTTPie's ability to send custom headers.
         """
-        # headers = {'Authorization': 'Bearer token123'}
-        # request = parse_request('GET', 'https://example.com', headers=headers)
-        # self.assertIn('Authorization', request.headers)
-        # self.assertEqual(request.headers['Authorization'], 'Bearer token123')
+        url = f"{BASE_URL}/test/headers"
+
+        result = subprocess.run(
+            ["http", "GET", url, "Authorization:Bearer sampletoken"],
+            capture_output=True,
+            text=True
+        )
+        self.assertIn("200 OK", result.stdout)
+        self.assertIn("Authorization header received", result.stdout)
 
 if __name__ == "__main__":
     unittest.main()

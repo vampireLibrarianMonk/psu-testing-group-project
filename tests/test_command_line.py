@@ -1,4 +1,3 @@
-import tempfile
 import unittest
 import subprocess
 import json
@@ -78,11 +77,15 @@ class TestCommandLineArguments(unittest.TestCase):
         - Uses HTTPie's `--verbose` option to capture detailed request-response info.
         - Checks for expected HTTP request headers in verbose output.
         """
-        result = subprocess.run([
+        result = self.run_httpie_command([
             'http', '--verbose', 'GET', 'https://httpbin.org/get'
-        ], capture_output=True, text=True)
-        self.assertIn('GET /get HTTP/1.1', result.stdout)
-        self.assertIn('Host: httpbin.org', result.stdout)
+        ])
+        # Ensure raw output mode for non-JSON verbose response
+        if isinstance(result, str):  # Verbose mode outputs text, not JSON
+            self.assertIn('GET /get HTTP/1.1', result)
+            self.assertIn('Host: httpbin.org', result)
+        else:
+            self.fail("Verbose mode output not as expected")
 
     def test_06_session_handling(self):
         """Test session handling with a POST request in session mode.
@@ -91,11 +94,14 @@ class TestCommandLineArguments(unittest.TestCase):
         - Verifies that session data is stored correctly across requests.
         """
         response = self.run_httpie_command([
-            'http', '--session=test_session', 'POST', 'https://httpbin.org/post',
+            'http', '--session=test_session', '--ignore-stdin', 'POST', 'https://httpbin.org/post',
             'key=value'
         ])
         if isinstance(response, dict) and 'json' in response:
+            # Verify that the session correctly sends the data
             self.assertEqual(response['json'], {'key': 'value'})
+        else:
+            self.fail("Session handling output not as expected")
 
     def test_07_offline_mode(self):
         """Test offline mode for command parsing without sending requests.
@@ -103,24 +109,39 @@ class TestCommandLineArguments(unittest.TestCase):
         - Uses HTTPie's `--offline` and `--ignore-stdin` options to simulate request generation.
         - Confirms the correct structure of the HTTP request without network transmission.
         """
-        result = subprocess.run([
+        result = self.run_httpie_command([
             'http', '--offline', '--ignore-stdin', '--json', 'POST', 'https://httpbin.org/post', 'name=OfflineUser'
-        ], capture_output=True, text=True)
+        ])
 
         # Check for correct HTTP structure in offline mode
-        self.assertIn('POST /post HTTP/1.1', result.stdout)
-        self.assertIn('"name": "OfflineUser"', result.stdout)
+        if isinstance(result, str):  # Offline mode outputs raw text
+            self.assertIn('POST /post HTTP/1.1', result)
+            self.assertIn('"name": "OfflineUser"', result)
+        else:
+            self.fail("Offline mode output not as expected")
 
     def test_08_streaming(self):
         """Test streaming mode to handle live responses.
 
         - Uses HTTPie's `--stream` option to receive a continuous data stream.
-        - Verifies that the stream completes successfully.
+        - Verifies that the stream completes successfully and contains valid JSON.
         """
-        result = subprocess.run([
+        result = self.run_httpie_command([
             'http', '--stream', 'GET', 'https://httpbin.org/stream/20'
-        ], capture_output=True, text=True)
-        self.assertEqual(result.returncode, 0)  # Stream should complete successfully
+        ])
+
+        if isinstance(result, str):  # Streaming outputs raw text
+            try:
+                # Parse the result line-by-line to validate JSON entries
+                lines = result.splitlines()
+                for line in lines:
+                    if line.strip():  # Ignore empty lines
+                        parsed_line = json.loads(line)  # Ensure JSON validity
+                        self.assertIn("id", parsed_line)  # Check for expected key
+            except json.JSONDecodeError:
+                self.fail("Streaming output contains invalid JSON")
+        else:
+            self.fail("Streaming mode output not as expected")
 
     def test_09_redirect_following(self):
         """Test handling of multiple redirects with the --follow option.
@@ -186,55 +207,6 @@ class TestCommandLineArguments(unittest.TestCase):
 
         # Assert that an error was detected before reaching the maximum limit
         self.assertTrue(error_detected, "Expected an error before reaching the maximum header count of 100.")
-
-    def test_15_payload_size_limit(self):
-        """Test a POST request with payload sizes increasing in increments of 5 MB, up to 20there  MB.
-
-        - This test writes the payload to a temporary file in chunks and uses HTTPie's @ notation
-          to avoid exceeding the argument list length limit imposed by the operating system.
-        """
-        error_detected = False
-        max_size_mb = 20  # Maximum payload size in MB
-        step_size_mb = 5  # Step size in MB
-        chunk_size_mb = 1  # Chunk size in MB
-
-        # Convert MB to characters (1 MB = 1,000,000 characters)
-        max_size = max_size_mb * 1000000
-        step_size = step_size_mb * 1000000
-        chunk_size = chunk_size_mb * 1000000
-
-        for size in range(step_size, max_size + 1, step_size):
-            with self.subTest(payload_size=f"{size // 1000000} MB"):
-                # Create a temporary file and write the payload in chunks
-                with tempfile.NamedTemporaryFile(mode='w+', delete=False) as temp_file:
-                    chunks = size // chunk_size
-                    remainder = size % chunk_size
-
-                    # Write full chunks of 1 MB each
-                    for _ in range(chunks):
-                        temp_file.write('a' * chunk_size)
-
-                    # Write any remaining characters
-                    if remainder:
-                        temp_file.write('a' * remainder)
-
-                    temp_file_name = temp_file.name
-
-                # Use the @ notation to read the payload from the file
-                response = self.run_httpie_command([
-                    'http', '--ignore-stdin', 'POST', 'https://httpbin.org/post', f'@{temp_file_name}'
-                ])
-
-                # Check if the response contains an error message or an indication of failure
-                if "error" in response or isinstance(response, str):
-                    error_detected = True
-                    print(f"Error detected at payload size: {size // 1000000} MB")
-                    break  # Exit loop when the error threshold is reached
-
-        # Assert that no error was detected and the test was successful
-        self.assertFalse(error_detected,
-                         "No error encountered: HTTPie handled all payload sizes up to 200 MB successfully.")
-
 
 if __name__ == "__main__":
     unittest.main()

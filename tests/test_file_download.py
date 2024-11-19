@@ -11,12 +11,6 @@ class TestFileDownloadWithHTTPie(unittest.TestCase):
     and then cleaning up the temporary directory.
     """
 
-    def setUp(self):
-        # Set up the temporary directory path within the test directory
-        # This ensures isolation for each test run and easy cleanup.
-        self.temp_dir = Path(__file__).parent / "temp_download"
-        self.temp_dir.mkdir(exist_ok=True)
-
     def calculate_md5(self, file_path):
         """Helper function to calculate the MD5 checksum of a file.
         This is used to verify the integrity of the downloaded file.
@@ -26,6 +20,12 @@ class TestFileDownloadWithHTTPie(unittest.TestCase):
             for byte_block in iter(lambda: f.read(4096), b""):
                 md5_hash.update(byte_block)
         return md5_hash.hexdigest()
+
+    def setUp(self):
+        # Set up the temporary directory path within the test directory
+        # This ensures isolation for each test run and easy cleanup.
+        self.temp_dir = Path(__file__).parent / "temp_download"
+        self.temp_dir.mkdir(exist_ok=True)
 
     def test_download_file_with_md5_check(self):
         """Test downloading a file using HTTPie, verifying it, and cleaning up.

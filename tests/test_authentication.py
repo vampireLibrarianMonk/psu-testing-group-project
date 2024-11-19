@@ -34,6 +34,31 @@ def test_status_500():
     process = subprocess.run(command, capture_output=True, text=True)
     assert 'INTERNAL SERVER ERROR' in process.stdout.upper(), "Failed: Expected 'INTERNAL SERVER ERROR' error message in response"
     assert '500' in process.stderr.upper(), "Failed: Expected '500' error message in response"
+
+def test_authentication(self):
+    """
+    Tests HTTPie's support for Basic Authentication.
+    """
+    url = f"{BASE_URL}/test/basic-auth"
+
+    # Test correct credentials
+    result = subprocess.run(
+        ["http", "--auth", "user1:password", "GET", url],
+        capture_output=True,
+        text=True
+    )
+    self.assertIn("200 OK", result.stdout)
+    self.assertIn("Basic Auth successful", result.stdout)
+
+    # Test incorrect credentials
+    result = subprocess.run(
+        ["http", "--auth", "wrong:creds", "GET", url],
+        capture_output=True,
+        text=True
+    )
+    self.assertIn("401 Unauthorized", result.stdout)
+    self.assertIn("error", result.stdout)
+
 # Run tests
 test_status_102()
 test_status_200()
