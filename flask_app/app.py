@@ -158,6 +158,79 @@ def large_payload():
     return jsonify({"error": "Payload not provided"}), 400
 
 #-------------------------------------------------------------------------------
+# Working with Cookies
+#-------------------------------------------------------------------------------
+@app.route('/set-cookie', methods=['GET', 'POST'])
+def set_cookie():
+    """
+    Set a cookie in the response.
+    Returns:
+        Response: Sets a cookie named 'test_cookie' with a value 'cookie_value'.
+    """
+    response = jsonify({"message": "Cookie set successfully"})
+    response.set_cookie('test_cookie', 'cookie_value')
+    return response
+
+@app.route('/check-cookie', methods=['GET', 'POST'])
+def check_cookie():
+    """
+    Check for the presence of a cookie in the request.
+    Returns:
+        Response: A JSON response indicating if the cookie was received.
+    """
+    cookie_value = request.cookies.get('test_cookie')
+    if cookie_value:
+        return jsonify({"message": "Cookie received", "cookie_value": cookie_value})
+    return jsonify({"message": "No valid cookies"}), 400
+
+@app.route('/set-expired-cookie', methods=['GET'])
+def set_expired_cookie():
+    """
+    Set a short-lived cookie to test cookie expiration.
+    Returns:
+        Response: A JSON response indicating the cookie was set with an expiration time.
+    """
+    response = jsonify({"message": "Short-lived cookie set"})
+    response.set_cookie('test_cookie', 'cookie_value', max_age=1)  # 1 second lifetime
+    return response
+
+@app.route('/set-multiple-cookies', methods=['GET', 'POST'])
+def set_multiple_cookies():
+    """
+    Set multiple cookies in the response.
+    Returns:
+        Response: Sets cookies named 'cookie1' and 'cookie2' with respective values.
+    """
+    response = jsonify({"message": "Multiple cookies set"})
+    response.set_cookie('cookie1', 'value1')
+    response.set_cookie('cookie2', 'value2')
+    return response
+
+@app.route('/check-multiple-cookies', methods=['GET', 'POST'])
+def check_multiple_cookies():
+    """
+    Check for multiple cookies in the request.
+    Returns:
+        Response: A JSON response indicating if all cookies were received.
+    """
+    cookie1 = request.cookies.get('cookie1')
+    cookie2 = request.cookies.get('cookie2')
+    if cookie1 and cookie2:
+        return jsonify({"message": "All cookies received", "cookie1": cookie1, "cookie2": cookie2})
+    return jsonify({"message": "Some or all cookies missing"}), 400
+
+@app.route('/delete-cookie', methods=['GET', 'POST'])
+def delete_cookie():
+    """
+    Delete a cookie by setting its expiration time in the past.
+    Returns:
+        Response: A JSON response indicating the cookie was deleted.
+    """
+    response = jsonify({"message": "Cookie deleted"})
+    response.set_cookie('test_cookie', '', expires=0)
+    return response
+
+#-------------------------------------------------------------------------------
 # Main Entry Point
 #-------------------------------------------------------------------------------
 
