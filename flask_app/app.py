@@ -1,3 +1,6 @@
+import csv
+import io
+from xml.etree import ElementTree as ET
 from flask import Flask, jsonify, redirect, request
 
 app = Flask(__name__)
@@ -229,6 +232,89 @@ def delete_cookie():
     response = jsonify({"message": "Cookie deleted"})
     response.set_cookie('test_cookie', '', expires=0)
     return response
+
+#-------------------------------------------------------------------------------
+# Response formatting
+#-------------------------------------------------------------------------------
+@app.route('/test/json', methods=['POST'])
+def test_json():
+    """
+    Handle POST requests with JSON payloads.
+    """
+    if not request.is_json:
+        return jsonify({"error": "Content-Type must be application/json"}), 400
+
+    try:
+        # Parse the JSON data
+        json_data = request.get_json()
+
+        return jsonify({
+            "method": request.method,
+            "Content-Type": request.headers.get("Content-Type"),
+            "data": json_data
+        }), 200
+    except Exception as e:
+        return jsonify({"error": f"Invalid JSON payload: {str(e)}"}), 400
+
+@app.route('/test/xml', methods=['POST'])
+def test_xml():
+    """
+    Handle POST requests with XML payloads.
+    """
+    if request.content_type != 'application/xml':
+        return jsonify({"error": "Content-Type must be application/xml"}), 400
+
+    try:
+        # Parse the XML data
+        xml_data = ET.fromstring(request.data)
+        xml_dict = {child.tag: child.text for child in xml_data}
+
+        return jsonify({
+            "method": request.method,
+            "Content-Type": request.headers.get("Content-Type"),
+            "data": xml_dict
+        }), 200
+    except ET.ParseError:
+        return jsonify({"error": "Invalid XML payload"}), 400
+
+
+@app.route('/test/csv', methods=['POST'])
+def test_csv():
+    """
+    Handle POST requests with CSV payloads.
+    """
+    if request.content_type != 'text/csv':
+        return jsonify({"error": "Content-Type must be text/csv"}), 400
+
+    try:
+        # Parse the CSV data
+        csv_file = io.StringIO(request.data.decode('utf-8'))
+        reader = csv.DictReader(csv_file)
+        rows = [row for row in reader]
+
+        return jsonify({
+            "method": request.method,
+            "Content-Type": request.headers.get("Content-Type"),
+            "data": rows
+        }), 200
+    except Exception as e:
+        return jsonify({"error": f"Invalid CSV payload: {str(e)}"}), 400
+
+@app.route('/test/html', methods=['POST'])
+def test_html():
+    """
+    Handle POST requests with HTML payloads.
+    """
+    if request.content_type != 'text/html':
+        return jsonify({"error": "Content-Type must be text/html"}), 400
+
+    html_data = request.data.decode('utf-8')
+
+    return jsonify({
+        "method": request.method,
+        "Content-Type": request.headers.get("Content-Type"),
+        "data": html_data
+    }), 200
 
 #-------------------------------------------------------------------------------
 # Main Entry Point
