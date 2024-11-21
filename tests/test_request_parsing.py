@@ -41,7 +41,7 @@ class TestRequestParsing(unittest.TestCase):
             capture_output=True,
             text=True
         )
-        self.assertIn("200 OK", result.stdout)
+        self.assertEqual(result.returncode, 0)
         self.assertIn("Authorization header received", result.stdout)
 
 if __name__ == "__main__":

@@ -77,3 +77,7 @@ build/
 # Installer logs
 pip-log.txt
 pip-delete-this-di
+
+# Coverage items
+.coverage
+htmlcov

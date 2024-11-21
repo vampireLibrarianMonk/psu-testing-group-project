@@ -39,7 +39,7 @@ class TestRequestParsing(unittest.TestCase):
             )
 
             # Assertions to verify subprocess behavior and HTTP response
-            self.assertEquals(result.returncode, 0, "The subprocess should exit with a return code of 0.")
+            self.assertEqual(result.returncode, 0, "The subprocess should exit with a return code of 0.")
             self.assertIn('"method":"POST"', result.stdout, "The method should be POST.")
             self.assertIn('"Content-Type":"application/json"', result.stdout,
                           "The Content-Type should be application/json.")
@@ -82,7 +82,7 @@ class TestRequestParsing(unittest.TestCase):
             )
 
             # Assertions to verify subprocess behavior and HTTP response
-            self.assertEquals(result.returncode, 0, "The subprocess should exit with a return code of 0.")
+            self.assertEqual(result.returncode, 0, "The subprocess should exit with a return code of 0.")
             self.assertIn('"method":"POST"', result.stdout, "The method should be POST.")
             self.assertIn('"Content-Type":"application/xml"', result.stdout,
                           "The Content-Type should be application/xml.")
@@ -118,7 +118,7 @@ class TestRequestParsing(unittest.TestCase):
             )
 
             # Assertions to verify subprocess behavior and HTTP response
-            self.assertEquals(result.returncode, 0, "The subprocess should exit with a return code of 0.")
+            self.assertEqual(result.returncode, 0, "The subprocess should exit with a return code of 0.")
             self.assertIn('"method":"POST"', result.stdout, "The method should be POST.")
             self.assertIn('"Content-Type":"text/csv"', result.stdout,
                           "The Content-Type should be text/csv.")
@@ -159,7 +159,7 @@ class TestRequestParsing(unittest.TestCase):
             )
 
             # Assertions to verify subprocess behavior and HTTP response
-            self.assertEquals(result.returncode, 0, "The subprocess should exit with a return code of 0.")
+            self.assertEqual(result.returncode, 0, "The subprocess should exit with a return code of 0.")
             self.assertIn('"method":"POST"', result.stdout, "The method should be POST.")
             self.assertIn('"Content-Type":"text/html"', result.stdout,
                           "The Content-Type should be text/html.")
