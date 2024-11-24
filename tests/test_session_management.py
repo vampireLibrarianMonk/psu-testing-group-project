@@ -74,7 +74,7 @@ class TestSessionManagement(unittest.TestCase):
         result = subprocess.run(['http', '--session-read-only=' + self.session_path, f'{self.base_url}/test/headers'], capture_output=True)
         self.assertIn('"Authorization header received"', result.stdout.decode())
 
-    def test_large_payload_session(self):
+    def test_large_payload_session_headers(self):
         """
         Test handling of large payloads in sessions.
 

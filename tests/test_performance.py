@@ -50,8 +50,9 @@ class TestPerformance(unittest.TestCase):
         for p in processes:
             p.join()
 
-    def test_payload_size_limit(self):
-        """Test a POST request with payload sizes increasing in increments of 5 MB, up to 20there  MB.
+    def test_file_upload_size_limits(self):
+        """Test a POST request with payload sizes increasing in increments of 5 MB, up to 20 MB. This hasw been tested
+        to 500 MB incrementing in 250 MB chunks just for giggles and to see if Github Issue #35 was reproducible.
 
         - This test writes the payload to a temporary file in chunks and uses HTTPie's @ notation
           to avoid exceeding the argument list length limit imposed by the operating system.
